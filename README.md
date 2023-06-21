@@ -7,10 +7,21 @@ Handle application graceful shutdown.
 
 ## 🧑‍💻 Usage
 
-- Use `NewShutdownObserver` to create a new observer goroutine which will be notified when os signal is received via shutdown (1st return value). This routine should clean up itself, and other spawn routines. It should call `done()` (2nd return value) to notify `go-shutdown-graceful` that cleanup is done.
-- Use `HandleSignals` to hold the main goroutine until os signal is received to the process
-- Use `HandleSignalsWithContext` to hold the main goroutine until os signal is received to the process or passed context is canceled
-- Use `Shutdown` to trigger shutdown signal to all observers. This is useful when you want to shut down based on API hook or goroutine other than the main goroutine.
+### Functions
+
+- `NewShutdownObserver` to create a new observer goroutine which will be notified when os signal is received via shutdown (1st return value). This routine should clean up itself, and other spawn routines. It should call `done()` (2nd return value) to notify `go-shutdown-graceful` that cleanup is done.
+- `HandleSignals` to hold the main goroutine until os signal is received to the process
+- `HandleSignalsWithContext` to hold the main goroutine until os signal is received to the process or passed context is canceled
+- `Shutdown` to trigger shutdown signal to all observers. This is useful when you want to shut down based on API hook or goroutine other than the main goroutine.
+
+### Logging
+
+If `GO_SHUTDOWN_GRACEFUL_LOG` environment variable is set to `true`, then logging is enabled.
+This can be overridden by calling the following functions:
+
+- `EnableLogging` to enable logging in this module. By default, logging is disabled.
+- `DisableLogging` to disable logging in this module.
+
 
 ```go
 package main

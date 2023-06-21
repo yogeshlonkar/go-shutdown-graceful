@@ -9,7 +9,7 @@ import (
 
 var logger = log.New(io.Discard, "[go-shutdown-graceful] ", log.LstdFlags|log.LUTC)
 
-func init() {
+func configerLogger() {
 	lvl, _ := os.LookupEnv("GO_SHUTDOWN_GRACEFUL_LOG")
 	if strings.ToLower(lvl) == "true" {
 		EnableLogging()

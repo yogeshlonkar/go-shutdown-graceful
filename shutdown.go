@@ -21,6 +21,11 @@ var (
 	ErrTimeout   = errors.New("timeout waiting")
 )
 
+// kill (no param) default sends syscall.SIGTERM
+// kill -2 is syscall.SIGINT
+// kill -15 is syscall.SIGTERM.
+var defaultOsSignals = []os.Signal{syscall.SIGINT, syscall.SIGTERM}
+
 func init() {
 	initGrace()
 }
@@ -30,11 +35,6 @@ func initGrace() {
 	routinesDone = make(chan struct{})
 	observers = &observerPool{wg: &sync.WaitGroup{}, count: &atomic.Int64{}}
 }
-
-// kill (no param) default sends syscall.SIGTERM
-// kill -2 is syscall.SIGINT
-// kill -15 is syscall.SIGTERM.
-var defaultOsSignals = []os.Signal{syscall.SIGINT, syscall.SIGTERM}
 
 // NewShutdownObserver will add a shutdown observerPool (goroutine) to the wait list.
 // It returns a channel for listening of shutdown signal and close function to be called when routine is done.
@@ -56,21 +56,9 @@ func HandleSignals(timeout time.Duration, signals ...os.Signal) error {
 	return HandleSignalsWithContext(context.Background(), timeout, signals...)
 }
 
-// Shutdown will send shutdown signal to goroutines listening on Shutdown.
-// Goroutine suspended by calling HandleSignals or HandleSignalsWithContext will resume.
-func Shutdown() error {
-	p, err := os.FindProcess(os.Getpid())
-	if err != nil {
-		return fmt.Errorf("failed to find current go process: %w", err)
-	}
-	if err = p.Signal(os.Interrupt); err != nil {
-		return fmt.Errorf("failed to send interrupt signal: %w", err)
-	}
-	return nil
-}
-
 // HandleSignalsWithContext is the same as HandleSignals but with context support.
 func HandleSignalsWithContext(ctx context.Context, timeout time.Duration, signals ...os.Signal) error {
+	configerLogger()
 	if len(signals) == 0 {
 		signals = defaultOsSignals
 	}
@@ -82,7 +70,11 @@ func HandleSignalsWithContext(ctx context.Context, timeout time.Duration, signal
 	if event.Fired != nil {
 		logger.Printf("received %s(%#v)! shutting down", event.Fired.String(), event.Fired)
 	}
-	go triggerShutdown()
+	go func() {
+		close(shutdown)
+		observers.Wait()
+		close(routinesDone)
+	}()
 	logger.Printf("waiting %d for services/ routines to finish", observers.Pending())
 	select {
 	case <-time.After(timeout):
@@ -98,8 +90,8 @@ func HandleSignalsWithContext(ctx context.Context, timeout time.Duration, signal
 	return nil
 }
 
-func triggerShutdown() {
-	close(shutdown)
-	observers.Wait()
-	close(routinesDone)
+// Shutdown will send shutdown signal to goroutines listening on Shutdown.
+// Goroutine suspended by calling HandleSignals or HandleSignalsWithContext will resume.
+func Shutdown() error {
+	return sendSignal(syscall.Getpid(), syscall.SIGINT)
 }
