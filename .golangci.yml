@@ -1,0 +1,53 @@
+run:
+  skip-dirs:
+    - pkg/pb
+linters:
+  enable:
+    - containedctx
+    - contextcheck
+    - dupl
+    - durationcheck
+    - errcheck
+    - errorlint
+    - exportloopref
+    - forcetypeassert
+    - gci
+    - goconst
+    - gocritic
+    - gocyclo
+    - godot
+    - gofmt
+    - goimports
+    - gomnd
+    - gosimple
+    - ineffassign
+    - makezero
+    - misspell
+    - nilerr
+    - predeclared
+    - revive
+    - staticcheck
+    - tenv
+    - unconvert
+    - unparam
+    - unused
+    - vet
+    - wrapcheck
+linters-settings:
+  goimports:
+    local-prefixes: github.com/yogeshlonkar/go-shutdown-graceful
+  wrapcheck:
+    ignoreSigRegexps:
+      - '.*github.com/yogeshlonkar/go-shutdown-graceful/.*'
+    ignorePackageGlobs:
+      - github.com/yogeshlonkar/go-shutdown-graceful/*
+  gocyclo:
+    min-complexity: 12
+
+  gci:
+    sections:
+      - standard # Standard section: captures all standard packages.
+      - default # Default section: contains all imports that could not be matched to another section type.
+      - dot
+      - prefix(github.com/yogeshlonkar/go-shutdown-graceful) # local packages.
+    custom-order: true
