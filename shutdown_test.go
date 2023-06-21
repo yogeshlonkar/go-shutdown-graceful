@@ -3,155 +3,169 @@ package graceful
 import (
 	"context"
 	"errors"
+	"os"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
 )
 
-func TestHandleHandleSignalsWithContext(t *testing.T) {
-	t.Run("should return nil if shutdown on signal", func(t *testing.T) {
-		initGrace()
-		tested := false
-		_, done := NewShutdownObserver()
-		go func() {
-			err := HandleSignalsWithContext(context.Background(), 0)
-			tested = true
-			if err != nil {
-				t.Errorf("expected nil, got %v", err)
-			}
-		}()
-		time.Sleep(100 * time.Millisecond)
-		if err := Shutdown(); err != nil {
+func TestHandleHandleSignalsWithContext_shutdown(t *testing.T) {
+	initGrace()
+	tested := &atomic.Bool{}
+	_, done := NewShutdownObserver()
+	go func() {
+		err := HandleSignalsWithContext(context.Background(), 0)
+		defer tested.Store(true)
+		if err != nil {
 			t.Errorf("expected nil, got %v", err)
 		}
-		time.Sleep(100 * time.Millisecond)
-		done()
-		time.Sleep(100 * time.Millisecond)
-		if !tested {
-			t.Error("expected to complete HandleSignalsWithContext")
-		}
-	})
-	t.Run("should return err if shutdown on context cancel", func(t *testing.T) {
-		initGrace()
-		tested := false
-		_, done := NewShutdownObserver()
-		ctx, cancel := context.WithCancel(context.Background())
-		go func() {
-			err := HandleSignalsWithContext(ctx, 0)
-			tested = true
-			if err == nil {
-				t.Error("expected err, got nil")
-			}
-			if !errors.Is(err, context.Canceled) {
-				t.Errorf("expected '%v' to be in error tree, got '%v'", context.Canceled, err)
-			}
-		}()
-		time.Sleep(100 * time.Millisecond)
-		cancel()
-		time.Sleep(100 * time.Millisecond)
-		done()
-		time.Sleep(100 * time.Millisecond)
-		if !tested {
-			t.Error("expected to complete HandleSignalsWithContext")
-		}
-	})
-	t.Run("should return err if shutdown on timeout", func(t *testing.T) {
-		initGrace()
-		tested := false
-		NewShutdownObserver()
-		go func() {
-			err := HandleSignalsWithContext(context.Background(), 50*time.Millisecond)
-			tested = true
-			if err == nil {
-				t.Error("expected err, got nil")
-			}
-			if !errors.Is(err, ErrTimeout) {
-				t.Errorf("expected '%v' to be in error tree, got '%v'", context.Canceled, err)
-			}
-		}()
-		time.Sleep(20 * time.Millisecond)
-		if err := Shutdown(); err != nil {
-			t.Errorf("expected nil, got %v", err)
-		}
-		time.Sleep(100 * time.Millisecond)
-		if !tested {
-			t.Error("expected to complete HandleSignalsWithContext")
-		}
-	})
+	}()
+	time.Sleep(100 * time.Millisecond)
+	if err := Shutdown(); err != nil {
+		t.Errorf("expected nil, got %v", err)
+	}
+	time.Sleep(100 * time.Millisecond)
+	done()
+	time.Sleep(100 * time.Millisecond)
+	if !tested.Load() {
+		t.Error("expected to complete HandleSignalsWithContext")
+	}
 }
 
-func TestHandleHandleSignals(t *testing.T) {
-	t.Run("should return nil if shutdown on signal", func(t *testing.T) {
-		initGrace()
-		tested := false
-		_, done := NewShutdownObserver()
-		go func() {
-			err := HandleSignals(0)
-			tested = true
-			if err != nil {
-				t.Errorf("expected nil, got %v", err)
-			}
-		}()
-		time.Sleep(100 * time.Millisecond)
-		err := Shutdown()
-		if err != nil {
-			t.Errorf("expected nil, got %v", err)
+func TestHandleHandleSignalsWithContext_context_cancel(t *testing.T) {
+	initGrace()
+	tested := &atomic.Bool{}
+	_, done := NewShutdownObserver()
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		err := HandleSignalsWithContext(ctx, 0)
+		defer tested.Store(true)
+		if err == nil {
+			t.Error("expected err, got nil")
 		}
-		time.Sleep(100 * time.Millisecond)
-		done()
-		time.Sleep(100 * time.Millisecond)
-		if err != nil {
-			t.Errorf("expected nil, got %v", err)
+		if !errors.Is(err, context.Canceled) {
+			t.Errorf("expected '%v' to be in error tree, got '%v'", context.Canceled, err)
 		}
-		if !tested {
-			t.Error("expected to complete HandleSignals")
-		}
-	})
-	t.Run("should return err if shutdown on timeout", func(t *testing.T) {
-		initGrace()
-		tested := false
-		NewShutdownObserver()
-		go func() {
-			err := HandleSignals(50 * time.Millisecond)
-			tested = true
-			if err == nil {
-				t.Error("expected err, got nil")
-			}
-			if !errors.Is(err, ErrTimeout) {
-				t.Errorf("expected '%v' to be in error tree, got '%v'", context.Canceled, err)
-			}
-		}()
-		time.Sleep(20 * time.Millisecond)
-		if err := Shutdown(); err != nil {
-			t.Errorf("expected nil, got %v", err)
-		}
-		time.Sleep(100 * time.Millisecond)
-		if !tested {
-			t.Error("expected to complete HandleSignals")
-		}
-	})
-	t.Run("should handle explicitly passed signals", func(t *testing.T) {
-		initGrace()
-		tested := false
-		NewShutdownObserver()
-		go func() {
-			err := HandleSignals(50*time.Millisecond, syscall.SIGABRT)
-			tested = true
-			if err == nil {
-				t.Error("expected err, got nil")
-			}
-			if !errors.Is(err, ErrTimeout) {
-				t.Errorf("expected '%v' to be in error tree, got '%v'", context.Canceled, err)
-			}
-		}()
-		time.Sleep(20 * time.Millisecond)
+	}()
+	time.Sleep(100 * time.Millisecond)
+	cancel()
+	time.Sleep(100 * time.Millisecond)
+	done()
+	time.Sleep(100 * time.Millisecond)
+	if !tested.Load() {
+		t.Error("expected to complete HandleSignalsWithContext")
+	}
+}
 
-		if err := sendSignal(syscall.Getpid(), syscall.SIGABRT); err != nil {
+func TestHandleHandleSignalsWithContext_timout(t *testing.T) {
+	initGrace()
+	tested := &atomic.Bool{}
+	NewShutdownObserver()
+	go func() {
+		err := HandleSignalsWithContext(context.Background(), 50*time.Millisecond)
+		defer tested.Store(true)
+		if err == nil {
+			t.Error("expected err, got nil")
+		}
+		if !errors.Is(err, ErrTimeout) {
+			t.Errorf("expected '%v' to be in error tree, got '%v'", context.Canceled, err)
+		}
+	}()
+	time.Sleep(20 * time.Millisecond)
+	if err := Shutdown(); err != nil {
+		t.Errorf("expected nil, got %v", err)
+	}
+	time.Sleep(100 * time.Millisecond)
+	if !tested.Load() {
+		t.Error("expected to complete HandleSignalsWithContext")
+	}
+}
+
+func TestHandleHandleSignals_shutdown(t *testing.T) {
+	initGrace()
+	tested := &atomic.Bool{}
+	_, done := NewShutdownObserver()
+	go func() {
+		err := HandleSignals(0)
+		defer tested.Store(true)
+		if err != nil {
 			t.Errorf("expected nil, got %v", err)
 		}
-		time.Sleep(100 * time.Millisecond)
-		if !tested {
-			t.Error("expected to complete HandleSignals")
+	}()
+	time.Sleep(100 * time.Millisecond)
+	err := Shutdown()
+	if err != nil {
+		t.Errorf("expected nil, got %v", err)
+	}
+	time.Sleep(100 * time.Millisecond)
+	done()
+	time.Sleep(100 * time.Millisecond)
+	if err != nil {
+		t.Errorf("expected nil, got %v", err)
+	}
+	if !tested.Load() {
+		t.Error("expected to complete HandleSignals")
+	}
+}
+
+func TestHandleHandleSignals_shutdown_timeout(t *testing.T) {
+	initGrace()
+	tested := &atomic.Bool{}
+	NewShutdownObserver()
+	go func() {
+		err := HandleSignals(50 * time.Millisecond)
+		defer tested.Store(true)
+		if err == nil {
+			t.Error("expected err, got nil")
 		}
-	})
+		if !errors.Is(err, ErrTimeout) {
+			t.Errorf("expected '%v' to be in error tree, got '%v'", context.Canceled, err)
+		}
+	}()
+	time.Sleep(20 * time.Millisecond)
+	if err := Shutdown(); err != nil {
+		t.Errorf("expected nil, got %v", err)
+	}
+	time.Sleep(100 * time.Millisecond)
+	if !tested.Load() {
+		t.Error("expected to complete HandleSignals")
+	}
+}
+
+func TestHandleHandleSignals_signal_args(t *testing.T) {
+	initGrace()
+	tested := &atomic.Bool{}
+	NewShutdownObserver()
+	go func() {
+		err := HandleSignals(50*time.Millisecond, syscall.SIGABRT)
+		defer tested.Store(true)
+		if err == nil {
+			t.Error("expected err, got nil")
+		}
+		if !errors.Is(err, ErrTimeout) {
+			t.Errorf("expected '%v' to be in error tree, got '%v'", context.Canceled, err)
+		}
+	}()
+	time.Sleep(20 * time.Millisecond)
+
+	if err := sendSignal(syscall.Getpid(), syscall.SIGABRT); err != nil {
+		t.Errorf("expected nil, got %v", err)
+	}
+	time.Sleep(100 * time.Millisecond)
+	if !tested.Load() {
+		t.Error("expected to complete HandleSignals")
+	}
+}
+
+func TestShutdown_failure(t *testing.T) {
+	observedSignals = []os.Signal{}
+	err := Shutdown()
+	if err == nil {
+		t.Error("expected err, got nil")
+		return
+	}
+	if !errors.Is(err, ErrSigTermNotObserved) {
+		t.Errorf("expected '%v' to be in error tree, got '%v'", ErrSigTermNotObserved, err)
+	}
 }

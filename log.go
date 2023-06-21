@@ -14,6 +14,9 @@ func configerLogger() {
 	if strings.ToLower(lvl) == "true" {
 		EnableLogging()
 	}
+	if strings.ToLower(lvl) == "false" {
+		DisableLogging()
+	}
 }
 
 // EnableLogging for this module.
