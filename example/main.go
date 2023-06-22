@@ -13,16 +13,16 @@ func main() {
 	go someGoroutine()
 	// if INT or TERM signal is received, go-shutdown-graceful will trigger shutdown signal to all observers.
 	// Observers can do cleanup and call done() to notify go-shutdown-graceful that they are done.
-	// Default timeout for cleanup is 30 seconds. This can be changed by calling HandleSignals with a time.Duration value.
-	//graceful.HandleSignals(0)
-	graceful.HandleSignalsWithContext(context.Background(), 0)
+	// Default timeout for cleanup is 30 seconds. This can be changed by calling Shutdown with a time.Duration value.
+	//graceful.Shutdown(0)
+	graceful.ShutdownWithContext(context.Background(), 0)
 	logger.Println("graceful shutdown complete")
 }
 
 func someGoroutine() {
 	stop := make(chan struct{})
 	go actualGoRoutine(stop)
-	shutdown, done := graceful.NewShutdownObserver()
+	shutdown, done := graceful.NewObserver()
 	<-shutdown
 	stop <- struct{}{}
 	done()

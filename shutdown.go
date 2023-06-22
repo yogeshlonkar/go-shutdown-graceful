@@ -2,54 +2,27 @@ package graceful
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"os"
-	"sync"
-	"sync/atomic"
-	"syscall"
 	"time"
-)
 
-// DefaultTimeout is the default timeout for shutdown.
-const DefaultTimeout = 30 * time.Second
-
-var ( // errors
-	ErrTimeout            = errors.New("timeout waiting")
-	ErrSigTermNotObserved = fmt.Errorf("not observing %s(%#v)", syscall.SIGTERM.String(), syscall.SIGTERM)
+	"github.com/yogeshlonkar/go-shutdown-graceful/internal/observer"
+	"github.com/yogeshlonkar/go-shutdown-graceful/internal/shutdown"
 )
 
 var (
-	shutdown     chan struct{}
-	routinesDone chan struct{}
-	observers    *observerPool
+	hook      *shutdown.Hook
+	observers *observer.Pool
 )
 
-// kill (no param) default sends syscall.SIGTERM
-// kill -2 is syscall.SIGINT
-// kill -15 is syscall.SIGTERM.
-var defaultSignals = []os.Signal{syscall.SIGINT, syscall.SIGTERM}
-var observedSignals []os.Signal
-
-func init() {
-	initGrace()
-}
-
-func initGrace() {
-	shutdown = make(chan struct{})
-	routinesDone = make(chan struct{})
-	observers = &observerPool{wg: &sync.WaitGroup{}, count: &atomic.Int64{}}
-}
-
-// NewShutdownObserver will add a shutdown observerPool (goroutine) to the wait list.
+// NewObserver will add the observer to a shutdown Pool (goroutines).
 // It returns a channel for listening of shutdown signal and close function to be called when routine is done.
-func NewShutdownObserver() (<-chan struct{}, func()) {
+func NewObserver() (<-chan struct{}, func()) {
 	closer := observers.Add()
-	return shutdown, closer
+	return hook.Notifier(), closer
 }
 
-// HandleSignals will wait for given signals once received, any of these signals will
-// send shutdown signal to goroutines listening on Shutdown.
+// Shutdown will wait for given signals once received, any of these signals will
+// send shutdown signal to goroutines listening on TriggerShutdown.
 // It waits for all goroutines to finish within timeout duration before exiting.
 // It should be called in the main goroutine to hold the process.
 //
@@ -57,52 +30,35 @@ func NewShutdownObserver() (<-chan struct{}, func()) {
 // If no signals are given, syscall.SIGINT, syscall.SIGTERM are used.
 //
 // syscall.SIGKILL but can't be caught, so it can't be handled.
-func HandleSignals(timeout time.Duration, signals ...os.Signal) error {
-	return HandleSignalsWithContext(context.Background(), timeout, signals...)
+func Shutdown(timeout time.Duration, signals ...os.Signal) error {
+	return ShutdownWithContext(context.Background(), timeout, signals...)
 }
 
-// HandleSignalsWithContext is the same as HandleSignals but with context support.
-func HandleSignalsWithContext(ctx context.Context, timeout time.Duration, signals ...os.Signal) error {
+// ShutdownWithContext is the same as Shutdown but with context support.
+func ShutdownWithContext(ctx context.Context, timeout time.Duration, signals ...os.Signal) error {
 	configerLogger()
-	observedSignals = defaultSignals
-	if len(signals) > 0 {
-		observedSignals = signals
-	}
-	if timeout == 0 {
-		timeout = DefaultTimeout
-	}
+	hook = shutdown.NewHook()
+	observers = observer.NewPool(logger)
 	// Wait for interrupt signal to gracefully shutdown the server with
-	_event := observe(ctx, observedSignals...)
-	if _event.Fired != nil {
-		logger.Printf("received %s(%#v)! shutting down", _event.Fired.String(), _event.Fired)
+	sig, err := hook.Observe(ctx, signals...)
+	if sig != nil {
+		logger.Printf("shutting down: received %s", *sig)
 	}
-	go func() {
-		close(shutdown)
-		observers.Wait()
-		close(routinesDone)
-	}()
+	if err != nil {
+		logger.Printf("shutting down: %q", err)
+	}
+	if sig == nil && err == nil {
+		logger.Println("shutting down: TriggerShutdown requested")
+	}
 	logger.Printf("waiting %d for services/ routines to finish", observers.Pending())
-	select {
-	case <-time.After(timeout):
-		if observers.Pending() > 0 {
-			return fmt.Errorf("graceful shutodwn: %d observers not closed: %w", observers.Pending(), ErrTimeout)
-		}
-	case <-routinesDone:
+	if err = observers.Close(timeout); err != nil {
+		return err
 	}
-	logger.Println("all observers closed")
-	if _event.Fired == nil {
-		return fmt.Errorf("graceful shutodwn: %w", _event.ContextErr)
-	}
-	return nil
+	return err
 }
 
-// Shutdown will send syscall.SIGTERM current go process, as result goroutine suspended by calling HandleSignals or HandleSignalsWithContext will resume.
-// If HandleSignals or HandleSignalsWithContext is not observing syscall.SIGTERM this returns error.
-func Shutdown() error {
-	for _, sig := range observedSignals {
-		if sig == syscall.SIGTERM {
-			return sendSignal(syscall.Getpid(), syscall.SIGTERM)
-		}
-	}
-	return ErrSigTermNotObserved
+// TriggerShutdown does not trigger any os signals.
+// It stop waiting for os signals and send shutdown signal to observers.
+func TriggerShutdown() {
+	hook.Trigger()
 }

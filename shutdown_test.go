@@ -3,170 +3,110 @@ package graceful
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"runtime"
-	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/yogeshlonkar/go-shutdown-graceful/internal/observer"
 )
 
-func TestHandleHandleSignalsWithContext_shutdown(t *testing.T) {
-	initGrace()
-	tested := &atomic.Bool{}
-	_, done := NewShutdownObserver()
+const delay = 10 * time.Millisecond
+
+func TestShutdownWithContext_trigger(t *testing.T) {
 	go func() {
-		err := HandleSignalsWithContext(context.Background(), 0)
-		defer tested.Store(true)
-		if err != nil {
-			t.Errorf("expected nil, got %v", err)
-		}
+		time.Sleep(delay)
+		_, done := NewObserver()
+		TriggerShutdown()
+		done()
 	}()
-	time.Sleep(100 * time.Millisecond)
-	if err := Shutdown(); err != nil {
+	if err := ShutdownWithContext(context.Background(), 0); err != nil {
 		t.Errorf("expected nil, got %v", err)
-	}
-	time.Sleep(100 * time.Millisecond)
-	done()
-	time.Sleep(1 * time.Second)
-	if !tested.Load() {
-		t.Error("expected to complete HandleSignalsWithContext")
 	}
 }
 
-func TestHandleHandleSignalsWithContext_context_cancel(t *testing.T) {
-	initGrace()
-	tested := &atomic.Bool{}
-	_, done := NewShutdownObserver()
+func TestShutdownWithContext_cancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
-		err := HandleSignalsWithContext(ctx, 0)
-		defer tested.Store(true)
-		if err == nil {
-			t.Error("expected err, got nil")
-		}
-		if !errors.Is(err, context.Canceled) {
-			t.Errorf("expected '%v' to be in error tree, got '%v'", context.Canceled, err)
-		}
+		time.Sleep(delay)
+		_, done := NewObserver()
+		cancel()
+		done()
 	}()
-	time.Sleep(100 * time.Millisecond)
-	cancel()
-	time.Sleep(100 * time.Millisecond)
-	done()
-	time.Sleep(100 * time.Millisecond)
-	if !tested.Load() {
-		t.Error("expected to complete HandleSignalsWithContext")
-	}
-}
-
-func TestHandleHandleSignalsWithContext_timout(t *testing.T) {
-	initGrace()
-	tested := &atomic.Bool{}
-	NewShutdownObserver()
-	go func() {
-		err := HandleSignalsWithContext(context.Background(), 50*time.Millisecond)
-		defer tested.Store(true)
-		if err == nil {
-			t.Error("expected err, got nil")
-		}
-		if !errors.Is(err, ErrTimeout) {
-			t.Errorf("expected '%v' to be in error tree, got '%v'", context.Canceled, err)
-		}
-	}()
-	time.Sleep(20 * time.Millisecond)
-	if err := Shutdown(); err != nil {
+	if err := ShutdownWithContext(ctx, 0); err != nil {
 		t.Errorf("expected nil, got %v", err)
 	}
-	time.Sleep(1 * time.Second)
-	if !tested.Load() {
-		t.Error("expected to complete HandleSignalsWithContext")
+}
+
+func TestShutdownWithContext_timout(t *testing.T) {
+	go func() {
+		time.Sleep(delay)
+		NewObserver()
+		TriggerShutdown()
+	}()
+	err := ShutdownWithContext(context.Background(), 50*time.Millisecond)
+	if err == nil {
+		t.Error("expected err, got nil")
+	}
+	if !errors.Is(err, observer.ErrTimeout) {
+		t.Errorf("expected '%v' to be in error tree, got '%v'", context.Canceled, err)
 	}
 }
 
-func TestHandleHandleSignals_shutdown(t *testing.T) {
-	initGrace()
-	tested := &atomic.Bool{}
-	_, done := NewShutdownObserver()
+func TestShutdown_trigger(t *testing.T) {
 	go func() {
-		err := HandleSignals(0)
-		defer tested.Store(true)
-		if err != nil {
-			t.Errorf("expected nil, got %v", err)
-		}
+		time.Sleep(delay)
+		_, done := NewObserver()
+		TriggerShutdown()
+		done()
 	}()
-	time.Sleep(100 * time.Millisecond)
-	err := Shutdown()
-	if err != nil {
+	if err := Shutdown(0); err != nil {
 		t.Errorf("expected nil, got %v", err)
 	}
-	time.Sleep(100 * time.Millisecond)
-	done()
-	time.Sleep(1 * time.Second)
-	if !tested.Load() {
-		t.Error("expected to complete HandleSignals")
-	}
 }
 
-func TestHandleHandleSignals_shutdown_timeout(t *testing.T) {
-	initGrace()
-	tested := &atomic.Bool{}
-	NewShutdownObserver()
+func TestShutdown_timeout(t *testing.T) {
 	go func() {
-		err := HandleSignals(50 * time.Millisecond)
-		defer tested.Store(true)
-		if err == nil {
-			t.Error("expected err, got nil")
-		}
-		if !errors.Is(err, ErrTimeout) {
-			t.Errorf("expected '%v' to be in error tree, got '%v'", context.Canceled, err)
-		}
+		time.Sleep(delay)
+		NewObserver()
+		TriggerShutdown()
 	}()
-	time.Sleep(20 * time.Millisecond)
-	if err := Shutdown(); err != nil {
-		t.Errorf("expected nil, got %v", err)
+	err := Shutdown(delay)
+	if err == nil {
+		t.Error("expected err, got nil")
 	}
-	time.Sleep(1 * time.Second)
-	if !tested.Load() {
-		t.Error("expected to complete HandleSignals")
+	if !errors.Is(err, observer.ErrTimeout) {
+		t.Errorf("expected '%v' to be in error tree, got '%v'", context.Canceled, err)
 	}
 }
 
-func TestHandleHandleSignals_signal_args(t *testing.T) {
+func TestShutdown_args(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.SkipNow()
 	}
-	initGrace()
-	tested := &atomic.Bool{}
-	NewShutdownObserver()
 	go func() {
-		err := HandleSignals(50*time.Millisecond, syscall.SIGABRT)
-		defer tested.Store(true)
-		if err == nil {
-			t.Error("expected err, got nil")
-		}
-		if !errors.Is(err, ErrTimeout) {
-			t.Errorf("expected '%v' to be in error tree, got '%v'", context.Canceled, err)
+		time.Sleep(delay)
+		NewObserver()
+		if err := trigger(syscall.SIGABRT); err != nil {
+			t.Errorf("expected nil, got %v", err)
 		}
 	}()
-	time.Sleep(20 * time.Millisecond)
-
-	if err := sendSignal(syscall.Getpid(), syscall.SIGABRT); err != nil {
-		t.Errorf("expected nil, got %v", err)
+	err := Shutdown(50*time.Millisecond, syscall.SIGABRT, syscall.SIGINT)
+	if err == nil {
+		t.Error("expected err, got nil")
 	}
-	time.Sleep(100 * time.Millisecond)
-	if !tested.Load() {
-		t.Error("expected to complete HandleSignals")
+	if !errors.Is(err, observer.ErrTimeout) {
+		t.Errorf("expected '%v' to be in error tree, got '%v'", context.Canceled, err)
 	}
 }
 
-func TestShutdown_failure(t *testing.T) {
-	observedSignals = []os.Signal{}
-	err := Shutdown()
-	if err == nil {
-		t.Error("expected err, got nil")
-		return
+// trigger will send a syscall.SIGTERM signal to given process id.
+func trigger(sig syscall.Signal) error {
+	pid := os.Getpid()
+	if err := syscall.Kill(pid, sig); err != nil {
+		return fmt.Errorf("failed to send signal %s(%#v) to current process %d: %w", syscall.SIGTERM.String(), syscall.SIGTERM, pid, err)
 	}
-	if !errors.Is(err, ErrSigTermNotObserved) {
-		t.Errorf("expected '%v' to be in error tree, got '%v'", ErrSigTermNotObserved, err)
-	}
+	return nil
 }
