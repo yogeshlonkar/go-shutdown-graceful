@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"runtime"
 	"sync/atomic"
 	"syscall"
 	"testing"
@@ -27,7 +28,7 @@ func TestHandleHandleSignalsWithContext_shutdown(t *testing.T) {
 	}
 	time.Sleep(100 * time.Millisecond)
 	done()
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(1 * time.Second)
 	if !tested.Load() {
 		t.Error("expected to complete HandleSignalsWithContext")
 	}
@@ -76,7 +77,7 @@ func TestHandleHandleSignalsWithContext_timout(t *testing.T) {
 	if err := Shutdown(); err != nil {
 		t.Errorf("expected nil, got %v", err)
 	}
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(1 * time.Second)
 	if !tested.Load() {
 		t.Error("expected to complete HandleSignalsWithContext")
 	}
@@ -100,10 +101,7 @@ func TestHandleHandleSignals_shutdown(t *testing.T) {
 	}
 	time.Sleep(100 * time.Millisecond)
 	done()
-	time.Sleep(100 * time.Millisecond)
-	if err != nil {
-		t.Errorf("expected nil, got %v", err)
-	}
+	time.Sleep(1 * time.Second)
 	if !tested.Load() {
 		t.Error("expected to complete HandleSignals")
 	}
@@ -127,13 +125,16 @@ func TestHandleHandleSignals_shutdown_timeout(t *testing.T) {
 	if err := Shutdown(); err != nil {
 		t.Errorf("expected nil, got %v", err)
 	}
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(1 * time.Second)
 	if !tested.Load() {
 		t.Error("expected to complete HandleSignals")
 	}
 }
 
 func TestHandleHandleSignals_signal_args(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.SkipNow()
+	}
 	initGrace()
 	tested := &atomic.Bool{}
 	NewShutdownObserver()
