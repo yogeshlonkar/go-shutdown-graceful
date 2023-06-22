@@ -70,7 +70,8 @@ jobs:
         run: go test ./...
 
   example:
-    name: Example
+    name: Example on Linux
+    needs: [test-linux, lint]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:

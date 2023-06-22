@@ -17,7 +17,7 @@ func sendSignal(pid int, _ syscall.Signal) error {
 	if err != nil {
 		return fmt.Errorf("failed to find GenerateConsoleCtrlEvent: %w", err)
 	}
-	r, _, err := p.Call(uintptr(syscall.CTRL_CLOSE_EVENT), uintptr(pid))
+	r, _, err := p.Call(uintptr(syscall.CTRL_BREAK_EVENT), uintptr(pid))
 	if r == 0 {
 		return fmt.Errorf("failed to generate console control event: %w", err)
 	}
