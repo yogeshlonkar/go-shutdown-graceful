@@ -1,4 +1,4 @@
-# go-shutdown-graceful [![Go Reference](https://pkg.go.dev/badge/github.com/yogeshlonkar/go-shutdown-graceful.svg)](https://pkg.go.dev/github.com/yogeshlonkar/go-shutdown-graceful) [![Continuous Integration](https://github.com/yogeshlonkar/go-shutdown-graceful/actions/workflows/on-push.yaml/badge.svg)](https://github.com/yogeshlonkar/go-shutdown-graceful/actions/workflows/on-push.yaml) [![Go Report Card](https://goreportcard.com/badge/github.com/yogeshlonkar/go-shutdown-graceful)](https://goreportcard.com/report/github.com/yogeshlonkar/go-shutdown-graceful)
+# go-shutdown-graceful [![Go Reference](https://pkg.go.dev/badge/github.com/yogeshlonkar/go-shutdown-graceful.svg)](https://pkg.go.dev/github.com/yogeshlonkar/go-shutdown-graceful) [![Continuous Integration](https://github.com/yogeshlonkar/go-shutdown-graceful/actions/workflows/on-push.yaml/badge.svg)](https://github.com/yogeshlonkar/go-shutdown-graceful/actions/workflows/on-push.yaml) , err)
 
 
 Handle application graceful shutdown.
