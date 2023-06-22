@@ -5,81 +5,75 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/yogeshlonkar/go-shutdown-graceful/internal/observer"
 )
 
-func TestHandleHandleSignalsWithContext(t *testing.T) {
-	t.Run("should return nil if shutdown on signal", func(t *testing.T) {
-		initGrace()
-		tested := false
-		_, done := NewShutdownObserver()
-		go func() {
-			err := HandleSignalsWithContext(context.Background(), 0)
-			tested = true
-			if err != nil {
-				t.Errorf("expected nil, got %v", err)
-			}
-		}()
-		time.Sleep(100 * time.Millisecond)
-		err := Shutdown()
-		if err != nil {
-			t.Errorf("expected nil, got %v", err)
-		}
-		time.Sleep(100 * time.Millisecond)
+const delay = 10 * time.Millisecond
+
+func TestShutdownWithContext_trigger(t *testing.T) {
+	go func() {
+		time.Sleep(delay)
+		_, done := NewObserver()
+		TriggerShutdown()
 		done()
-		time.Sleep(100 * time.Millisecond)
-		if err != nil {
-			t.Errorf("expected nil, got %v", err)
-		}
-		if !tested {
-			t.Error("expected to complete HandleSignalsWithContext")
-		}
-	})
-	t.Run("should return err if shutdown on context", func(t *testing.T) {
-		initGrace()
-		tested := false
-		_, done := NewShutdownObserver()
-		ctx, cancel := context.WithCancel(context.Background())
-		go func() {
-			err := HandleSignalsWithContext(ctx, 0)
-			tested = true
-			if err == nil {
-				t.Error("expected err, got nil")
-			}
-			if !errors.Is(err, context.Canceled) {
-				t.Errorf("expected '%v' to be in error tree, got '%v'", context.Canceled, err)
-			}
-		}()
-		time.Sleep(100 * time.Millisecond)
+	}()
+	if err := ShutdownWithContext(context.Background(), 0); err != nil {
+		t.Errorf("expected nil, got %v", err)
+	}
+}
+
+func TestShutdownWithContext_cancel(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(delay)
+		_, done := NewObserver()
 		cancel()
-		time.Sleep(100 * time.Millisecond)
 		done()
-		time.Sleep(100 * time.Millisecond)
-		if !tested {
-			t.Error("expected to complete HandleSignalsWithContext")
-		}
-	})
-	t.Run("should return err if shutdown on timeout", func(t *testing.T) {
-		initGrace()
-		tested := false
-		NewShutdownObserver()
-		go func() {
-			err := HandleSignalsWithContext(context.Background(), 50*time.Millisecond)
-			tested = true
-			if err == nil {
-				t.Error("expected err, got nil")
-			}
-			if !errors.Is(err, ErrTimeout) {
-				t.Errorf("expected '%v' to be in error tree, got '%v'", context.Canceled, err)
-			}
-		}()
-		time.Sleep(20 * time.Millisecond)
-		err := Shutdown()
-		if err != nil {
-			t.Errorf("expected nil, got %v", err)
-		}
-		time.Sleep(100 * time.Millisecond)
-		if !tested {
-			t.Error("expected to complete HandleSignalsWithContext")
-		}
-	})
+	}()
+	if err := ShutdownWithContext(ctx, 0); err != nil {
+		t.Errorf("expected nil, got %v", err)
+	}
+}
+
+func TestShutdownWithContext_timout(t *testing.T) {
+	go func() {
+		time.Sleep(delay)
+		NewObserver()
+		TriggerShutdown()
+	}()
+	err := ShutdownWithContext(context.Background(), 50*time.Millisecond)
+	if err == nil {
+		t.Error("expected err, got nil")
+	}
+	if !errors.Is(err, observer.ErrTimeout) {
+		t.Errorf("expected '%v' to be in error tree, got '%v'", context.Canceled, err)
+	}
+}
+
+func TestShutdown_trigger(t *testing.T) {
+	go func() {
+		time.Sleep(delay)
+		_, done := NewObserver()
+		TriggerShutdown()
+		done()
+	}()
+	if err := Shutdown(0); err != nil {
+		t.Errorf("expected nil, got %v", err)
+	}
+}
+
+func TestShutdown_timeout(t *testing.T) {
+	go func() {
+		time.Sleep(delay)
+		NewObserver()
+		TriggerShutdown()
+	}()
+	err := Shutdown(delay)
+	if err == nil {
+		t.Error("expected err, got nil")
+	}
+	if !errors.Is(err, observer.ErrTimeout) {
+		t.Errorf("expected '%v' to be in error tree, got '%v'", context.Canceled, err)
+	}
 }
