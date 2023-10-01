@@ -15,7 +15,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Clone
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - id: setup-go
         name: Setup GO
         uses: actions/setup-go@v4
@@ -45,7 +45,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Clone
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - id: setup-go
         name: Setup GO
         uses: actions/setup-go@v4
@@ -60,7 +60,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Clone
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - id: setup-go
         name: Setup GO
         uses: actions/setup-go@v4
